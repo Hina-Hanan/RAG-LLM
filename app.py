@@ -39,24 +39,24 @@ async def lifespan(app: FastAPI):
         
         print("\n[1/3] Initializing vector store...")
         vector_store_manager = initialize_vector_store()
-        print("✓ Vector store initialized")
+        print("[OK] Vector store initialized")
         
         print("\n[2/3] Initializing LLM manager...")
         llm_manager = LLMManager()
-        print("✓ LLM manager initialized")
+        print("[OK] LLM manager initialized")
         
         print("\n[3/3] Creating retrieval chain...")
         retriever = vector_store_manager.get_retriever(top_k=settings.top_k_results)
         llm_manager.create_retrieval_chain(retriever)
-        print("✓ Retrieval chain created")
+        print("[OK] Retrieval chain created")
         
         print("\n" + "=" * 50)
-        print("✓ RAG Chatbot API is ready!")
+        print("[OK] RAG Chatbot API is ready!")
         print("=" * 50)
     except Exception as e:
         import traceback
         print("\n" + "=" * 50)
-        print("✗ ERROR during startup:")
+        print("[ERROR] ERROR during startup:")
         print("=" * 50)
         print(f"Error: {str(e)}")
         print("\nFull traceback:")
@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI):
         print("=" * 50)
         # Don't raise - allow app to start so health check can show error
         # This helps with debugging on Render
-        print("⚠ App will start but /chat endpoint will return errors")
+        print("[WARNING] App will start but /chat endpoint will return errors")
     
     yield
     

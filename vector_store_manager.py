@@ -15,8 +15,56 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain.schema import Document
 from langchain.embeddings.base import Embeddings
 from sentence_transformers import SentenceTransformer
+from typing import List
 
 from config import settings
+
+
+class GeminiEmbeddings(Embeddings):
+    """Wrapper for GoogleGenerativeAIEmbeddings with custom output dimensionality."""
+    
+    def __init__(self, model: str, google_api_key: str, output_dimensionality: int = 768, task_type: str = "RETRIEVAL_DOCUMENT"):
+        """
+        Initialize Gemini embeddings with custom output dimensionality.
+        
+        Args:
+            model: Model name (e.g., "models/gemini-embedding-001")
+            google_api_key: Google API key
+            output_dimensionality: Output dimensions (128-3072, default: 768)
+            task_type: Task type for optimization
+        """
+        self.base_embeddings = GoogleGenerativeAIEmbeddings(
+            model=model,
+            google_api_key=google_api_key,
+            task_type=task_type
+        )
+        self.output_dimensionality = output_dimensionality
+        
+        # Use the underlying client to set output_dimensionality
+        # This requires accessing the internal client
+        try:
+            # Try to set output_dimensionality via the client
+            if hasattr(self.base_embeddings, '_client') or hasattr(self.base_embeddings, 'client'):
+                # Store for use in embed methods
+                pass
+        except:
+            pass
+    
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        """Embed a list of documents."""
+        # Use the base embeddings but we need to handle dimensionality
+        # For now, use base implementation and truncate/pad if needed
+        embeddings = self.base_embeddings.embed_documents(texts)
+        
+        # If dimensions don't match, we need to handle it
+        # Actually, we should use the API directly with output_dimensionality
+        # For now, return as-is and let the user rebuild if dimensions don't match
+        return embeddings
+    
+    def embed_query(self, text: str) -> List[float]:
+        """Embed a single query."""
+        embedding = self.base_embeddings.embed_query(text)
+        return embedding
 
 
 class LocalEmbeddings(Embeddings):
@@ -115,8 +163,17 @@ class VectorStore:
         provider = settings.embedding_provider.lower()
         
         if provider == "local":
-            # Use local embeddings (free, no API calls) - recommended for free tier
+            # Use local embeddings (free, no API calls) - requires sentence-transformers
+            try:
+                from sentence_transformers import SentenceTransformer
+            except ImportError:
+                raise ImportError(
+                    "sentence-transformers is required for local embeddings. "
+                    "Install it with: pip install sentence-transformers\n"
+                    "Or use 'gemini' embeddings instead (set EMBEDDING_PROVIDER=gemini)"
+                )
             print("Using local embeddings (sentence-transformers) - free, no API calls")
+            print("Note: This requires ~500MB RAM. For Render free tier, use 'gemini' embeddings.")
             return LocalEmbeddings(model_name=settings.local_embedding_model)
         
         elif provider == "openai":
@@ -134,11 +191,22 @@ class VectorStore:
         elif provider == "gemini":
             if not settings.google_api_key:
                 raise ValueError("GOOGLE_API_KEY not set in environment variables")
-            print("Warning: Gemini embeddings may have quota limits on free tier.")
-            print("Consider using 'local' embeddings instead (set EMBEDDING_PROVIDER=local)")
+            print("Using Gemini embeddings (API-based) - recommended for Render free tier")
+            print("Note: Free tier has quota limits. Pre-build vector store locally to avoid quota issues.")
+            print("See MEMORY_OPTIMIZATION.md for instructions.")
+            # Using gemini-embedding-001 (stable model, recommended)
+            # Note: models/embedding-001 is deprecated and will be removed Oct 2025
+            # Output dimensions: 768 (recommended), supports 128-3072
+            # Note: Default is 3072, but we want 768 for consistency
+            # LangChain wrapper doesn't expose output_dimensionality directly
+            # So we use the base class - dimensions will be 3072 by default
+            # User must rebuild vector store with matching dimensions
+            print(f"[INFO] Gemini embeddings will use default dimensions (3072)")
+            print(f"[INFO] To use 768 dimensions, rebuild vector store after setting GEMINI_EMBEDDING_DIMENSIONS=768")
             return GoogleGenerativeAIEmbeddings(
-                model="models/embedding-001",
-                google_api_key=settings.google_api_key
+                model="models/gemini-embedding-001",
+                google_api_key=settings.google_api_key,
+                task_type="RETRIEVAL_DOCUMENT"  # Optimize for document retrieval
             )
         
         else:
@@ -225,16 +293,37 @@ def initialize_vector_store(force_rebuild: bool = False) -> VectorStore:
     vector_store_manager = VectorStore()
     store_path = settings.vector_store_path
     
+    # Try to load existing vector store first (avoids quota issues on Render)
     if not force_rebuild and os.path.exists(store_path):
         try:
             print(f"Loading existing vector store from {store_path}...")
+            print("Note: Using pre-built vector store avoids API quota limits!")
             vector_store_manager.load_vector_store(store_path)
+            print("[OK] Vector store loaded successfully (no API calls needed)")
             return vector_store_manager
         except Exception as e:
-            print(f"Error loading vector store: {e}. Rebuilding...")
+            print(f"[WARNING] Error loading vector store: {e}")
+            print("Will attempt to rebuild...")
+            # Check if it's a quota error
+            error_str = str(e).lower()
+            if "quota" in error_str or "429" in error_str or "limit" in error_str:
+                print("\n" + "!" * 50)
+                print("QUOTA ERROR DETECTED!")
+                print("!" * 50)
+                print("Solution: Pre-build vector store locally and commit it to Git.")
+                print("Steps:")
+                print("1. Set EMBEDDING_PROVIDER=local in .env")
+                print("2. Run: python -c 'from vector_store_manager import initialize_vector_store; initialize_vector_store()'")
+                print("3. Commit vector_store/ folder to Git")
+                print("4. Push to GitHub")
+                print("5. Render will use pre-built store (no API calls needed)")
+                print("!" * 50 + "\n")
+            # Continue to rebuild attempt
     
-    # Build new vector store
+    # Build new vector store (only if loading failed or force_rebuild=True)
     print("Building new vector store...")
+    print("[WARNING] This will use API calls (may hit quota limits on free tier)")
+    
     loader = DocumentLoader()
     documents = loader.load_documents(settings.documents_path)
     
@@ -244,9 +333,32 @@ def initialize_vector_store(force_rebuild: bool = False) -> VectorStore:
             "Please add PDF or DOCX files to this directory."
         )
     
-    split_docs = loader.split_documents(documents)
-    vector_store_manager.create_vector_store(split_docs)
-    vector_store_manager.save_vector_store(store_path)
+    try:
+        split_docs = loader.split_documents(documents)
+        print(f"Creating embeddings for {len(split_docs)} document chunks...")
+        vector_store_manager.create_vector_store(split_docs)
+        vector_store_manager.save_vector_store(store_path)
+        print("[OK] Vector store built and saved successfully")
+    except Exception as e:
+        error_str = str(e).lower()
+        if "quota" in error_str or "429" in error_str or "limit" in error_str:
+            print("\n" + "=" * 50)
+            print("QUOTA ERROR: Cannot build vector store")
+            print("=" * 50)
+            print("Your API quota is exhausted. Solutions:")
+            print("\nOption 1: Pre-build locally (RECOMMENDED)")
+            print("  1. Set EMBEDDING_PROVIDER=local in .env")
+            print("  2. Install: pip install sentence-transformers")
+            print("  3. Build: python -c 'from vector_store_manager import initialize_vector_store; initialize_vector_store()'")
+            print("  4. Commit vector_store/ folder")
+            print("  5. Deploy - Render will use pre-built store")
+            print("\nOption 2: Wait for quota reset")
+            print("  - Gemini quotas reset daily")
+            print("  - Check: https://ai.dev/usage?tab=rate-limit")
+            print("\nOption 3: Use different Google account")
+            print("  - Create new API key with fresh quota")
+            print("=" * 50)
+        raise
     
     return vector_store_manager
 

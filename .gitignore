@@ -41,7 +41,8 @@ env/
 .DS_Store
 Thumbs.db
 
-# Vector Store (optional - uncomment if you don't want to commit)
+# Vector Store - Keep this commented to commit pre-built vector store
+# This allows Render to use pre-built store without API calls
 # vector_store/
 
 # Documents (optional - uncomment if you don't want to commit)

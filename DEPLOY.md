@@ -56,28 +56,49 @@ If you have `render.yaml` in your repository:
 4. Render will automatically detect `render.yaml` and configure everything
 5. You'll still need to add `GOOGLE_API_KEY` in the Environment Variables section
 
-## Step 3: Upload Documents
+## Step 3: Pre-Build Vector Store (IMPORTANT for Free Tier!)
 
-Since Render's file system is ephemeral, you have two options:
+**⚠️ CRITICAL**: To avoid quota issues on Render free tier, pre-build your vector store locally:
 
-### Option A: Include Documents in Repository (Recommended for small files)
+### Why Pre-Build?
 
-1. Add your PDF/DOCX files to the `documents/` folder
-2. Commit and push:
+- **Avoids API quota limits** during deployment
+- **Faster deployment** (no embedding generation)
+- **Works reliably** on free tier
+
+### How to Pre-Build:
+
+1. **Build locally** (use local embeddings to avoid quota):
    ```bash
-   git add documents/
-   git commit -m "Add documents"
+   # Install sentence-transformers locally
+   pip install sentence-transformers>=2.2.0
+   
+   # Set local embeddings
+   # In .env: EMBEDDING_PROVIDER=local
+   
+   # Build vector store
+   python build_vector_store.py
+   ```
+
+2. **Commit the vector store**:
+   ```bash
+   git add vector_store/
+   git commit -m "Add pre-built vector store for Render"
    git push
    ```
 
-### Option B: Use External Storage (Recommended for large files)
+3. **On Render**: Set `EMBEDDING_PROVIDER=gemini` (or match what you used to build)
 
-For production, consider using:
-- AWS S3
-- Google Cloud Storage
-- Azure Blob Storage
+**Note**: See `FREE_TIER_SETUP.md` for detailed instructions.
 
-Then modify `vector_store_manager.py` to download documents on startup.
+### Upload Documents
+
+Add your PDF/DOCX files to the `documents/` folder and commit:
+```bash
+git add documents/
+git commit -m "Add documents"
+git push
+```
 
 ## Step 4: Monitor Deployment
 

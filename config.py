@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     # Local Embedding Model (for sentence-transformers)
     local_embedding_model: str = os.getenv("LOCAL_EMBEDDING_MODEL", "all-MiniLM-L6-v2")
     
+    # Gemini Embedding Output Dimensionality (for gemini embeddings)
+    # Options: 128, 256, 512, 768 (recommended), 1536, 2048, 3072
+    # Default: 768 (recommended for RAG)
+    gemini_embedding_dimensions: int = int(os.getenv("GEMINI_EMBEDDING_DIMENSIONS", "768"))
+    
     # Vector Store Configuration
     vector_store_path: str = os.getenv("VECTOR_STORE_PATH", "./vector_store")
     documents_path: str = os.getenv("DOCUMENTS_PATH", "./documents")
