@@ -11,7 +11,6 @@ from pathlib import Path
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain.schema import Document
 from langchain.embeddings.base import Embeddings
@@ -121,6 +120,13 @@ class VectorStore:
             return LocalEmbeddings(model_name=settings.local_embedding_model)
         
         elif provider == "openai":
+            try:
+                from langchain_openai import OpenAIEmbeddings
+            except ImportError:
+                raise ImportError(
+                    "langchain-openai is required for OpenAI embeddings. "
+                    "Install it with: pip install langchain-openai"
+                )
             if not settings.openai_api_key:
                 raise ValueError("OPENAI_API_KEY not set in environment variables")
             return OpenAIEmbeddings(api_key=settings.openai_api_key)

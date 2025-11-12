@@ -9,7 +9,6 @@ from typing import Optional, Dict, Any
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.language_models import BaseChatModel
 from langchain_core.runnables import Runnable
@@ -29,6 +28,13 @@ class LLMManager:
         provider = settings.llm_provider.lower()
         
         if provider == "openai":
+            try:
+                from langchain_openai import ChatOpenAI
+            except ImportError:
+                raise ImportError(
+                    "langchain-openai is required for OpenAI provider. "
+                    "Install it with: pip install langchain-openai"
+                )
             if not settings.openai_api_key:
                 raise ValueError("OPENAI_API_KEY not set in environment variables")
             return ChatOpenAI(

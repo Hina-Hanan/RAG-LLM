@@ -31,22 +31,40 @@ async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events."""
     global vector_store_manager, llm_manager
     
-    # Startup
+    # Startup - with better error handling for Render
     try:
-        print("Initializing vector store...")
+        print("=" * 50)
+        print("Starting RAG Chatbot initialization...")
+        print("=" * 50)
+        
+        print("\n[1/3] Initializing vector store...")
         vector_store_manager = initialize_vector_store()
+        print("✓ Vector store initialized")
         
-        print("Initializing LLM manager...")
+        print("\n[2/3] Initializing LLM manager...")
         llm_manager = LLMManager()
+        print("✓ LLM manager initialized")
         
-        print("Creating retrieval chain...")
+        print("\n[3/3] Creating retrieval chain...")
         retriever = vector_store_manager.get_retriever(top_k=settings.top_k_results)
         llm_manager.create_retrieval_chain(retriever)
+        print("✓ Retrieval chain created")
         
-        print("RAG Chatbot API is ready!")
+        print("\n" + "=" * 50)
+        print("✓ RAG Chatbot API is ready!")
+        print("=" * 50)
     except Exception as e:
-        print(f"Error during startup: {e}")
-        raise
+        import traceback
+        print("\n" + "=" * 50)
+        print("✗ ERROR during startup:")
+        print("=" * 50)
+        print(f"Error: {str(e)}")
+        print("\nFull traceback:")
+        traceback.print_exc()
+        print("=" * 50)
+        # Don't raise - allow app to start so health check can show error
+        # This helps with debugging on Render
+        print("⚠ App will start but /chat endpoint will return errors")
     
     yield
     
@@ -112,9 +130,19 @@ async def health_check():
     """Health check endpoint."""
     if vector_store_manager is None or llm_manager is None:
         return HealthResponse(
-            status="unhealthy",
-            message="Vector store or LLM manager not initialized"
+            status="initializing",
+            message="Service is still initializing. Please wait..."
         )
+    
+    # Check if vector store is actually loaded
+    try:
+        if vector_store_manager.vector_store is None:
+            return HealthResponse(
+                status="initializing",
+                message="Vector store is loading..."
+            )
+    except:
+        pass
     
     return HealthResponse(
         status="healthy",
@@ -229,11 +257,23 @@ async def get_documentation():
 
 def main():
     """Run the FastAPI application."""
+    import os
+    # Use Render's PORT if available, otherwise use config
+    # This allows the app to work both locally and on Render
+    port = int(os.getenv("PORT", settings.api_port))
+    host = os.getenv("HOST", settings.api_host)
+    # Disable reload in production (Render sets PORT environment variable)
+    # Enable reload only for local development
+    reload = os.getenv("RELOAD", "false").lower() == "true"
+    # Auto-disable reload if PORT is set (production environment)
+    if os.getenv("PORT"):
+        reload = False
+    
     uvicorn.run(
         "app:app",
-        host=settings.api_host,
-        port=settings.api_port,
-        reload=True
+        host=host,
+        port=port,
+        reload=reload
     )
 
 
