@@ -6,8 +6,6 @@ for RAG-based question answering.
 """
 
 from typing import Optional, Dict, Any
-from langchain.chains import create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.language_models import BaseChatModel
@@ -66,6 +64,22 @@ class LLMManager:
         Returns:
             Retrieval chain runnable
         """
+        # Import chains - LangChain 1.0+ compatibility
+        # In LangChain 1.0+, chains moved to langchain-classic package
+        try:
+            # Try langchain-classic first (LangChain 1.0+)
+            from langchain_classic.chains import create_retrieval_chain
+            from langchain_classic.chains.combine_documents import create_stuff_documents_chain
+        except ImportError:
+            # Fallback to langchain.chains (older versions)
+            try:
+                from langchain.chains import create_retrieval_chain
+                from langchain.chains.combine_documents import create_stuff_documents_chain
+            except ImportError:
+                # Last resort: try langchain.chains.retrieval
+                from langchain.chains.retrieval import create_retrieval_chain
+                from langchain.chains.combine_documents import create_stuff_documents_chain
+        
         # Create prompt template for RAG
         prompt = ChatPromptTemplate.from_messages([
             ("system", """You are a helpful AI assistant that answers questions based on the provided context.
