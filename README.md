@@ -98,7 +98,7 @@ A production-ready RAG (Retrieval-Augmented Generation) chatbot built with FAISS
    
    # Model Configuration
    MODEL_NAME=gemini-pro  # For OpenAI: gpt-3.5-turbo, gpt-4, etc.
-   # For Gemini: gemini-pro
+   # For Gemini: gemini-2.5-flash
    
    # Vector Store Configuration
    VECTOR_STORE_PATH=./vector_store
