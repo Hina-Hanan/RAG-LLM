@@ -14,7 +14,6 @@ from langchain_community.vectorstores import FAISS
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from sentence_transformers import SentenceTransformer
 from typing import List
 
 from config import settings
@@ -72,6 +71,14 @@ class LocalEmbeddings(Embeddings):
     
     def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
         print(f"Loading local embedding model: {model_name}")
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError:
+            raise ImportError(
+                "sentence-transformers is required for local embeddings. "
+                "Install it with: pip install sentence-transformers\n"
+                "Or use 'gemini' embeddings instead (set EMBEDDING_PROVIDER=gemini)"
+            )
         self.model = SentenceTransformer(model_name)
         print(f"Local embedding model loaded successfully!")
     
