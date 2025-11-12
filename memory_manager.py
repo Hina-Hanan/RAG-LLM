@@ -6,7 +6,7 @@ This module implements conversation memory to retain context across interactions
 
 from typing import List, Dict, Any, Optional
 from langchain.memory import ConversationBufferMemory
-from langchain.schema import BaseMessage, HumanMessage, AIMessage
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from pydantic import BaseModel
 
 
